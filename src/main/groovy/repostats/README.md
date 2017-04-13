@@ -14,3 +14,7 @@ This would read the repo and generate 2 files which contains various stats relat
 Load url
 
     oak-run.jar console ":load https://github.com/chetanmeh/oak-console-scripts/blob/master/src/main/groovy/repostats/oakRepoStats.groovy"
+    
+* Read only
+* Does not require DataStore
+* See [readme](../../../../README.md#usage) for usage details 
