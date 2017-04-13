@@ -2,6 +2,11 @@
 
 This module hosts miscellaneous scripts which can be used with [oak-run][1]. 
 
+## Provided Scripts
+
+* [Repository Statistics](src/main/groovy/repostats) - Generates useful statistics report for repository content
+* [Index Consistency Checker](src/main/groovy/index) - Checks consistency of Lucene indexes
+
 ## Usage
 
 To make use of this script
@@ -41,15 +46,18 @@ Usage with FileDataStore
 Usage with Mongo
 
     console mongodb://server:27017/dbname
+    
+**Running via ssh**
+
+Set system property `-Djline.terminal=jline.UnsupportedTerminal` when running the command via `nohup`
+
+```
+$ nohup java -Xmx4g -Djline.terminal=jline.UnsupportedTerminal -jar oak-run*.jar console --segment=true /path/to/segmentstore ":load https://github.com/chetanmeh/oak-console-scripts/blob/master/src/main/groovy/repostats/oakRepoStats.groovy" &
+```
 
 ### S3DataStore
 
 S3 support pending OAK-6077
-
-### Provided Scripts
-
-* [Repository Statistics](src/main/groovy/repostats) - Generates useful statistics report for repository content
-* [Index Consistency Checker](src/main/groovy/index) - Checks consistency of Lucene indexes
 
  
 [1]: https://github.com/apache/jackrabbit-oak/tree/trunk/oak-run#console
