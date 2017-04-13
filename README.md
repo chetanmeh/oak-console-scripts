@@ -18,7 +18,7 @@ Or download it from [here][2]
 Run console and load the script. Standard usage
 
 ```
-java -jar oak-run*.jar console /path/to/segmentstore ":load http://url/of/script"
+java -jar oak-run*.jar console /path/to/segmentstore ":load https://github.com/chetanmeh/oak-console-scripts/blob/master/src/main/groovy/checkIndexConsistency.groovy"
 ```
 
 This would load the script and execute it and output would be dumped to console. Some scripts
@@ -45,6 +45,7 @@ Usage with Mongo
 ### S3DataStore
 
 S3 support pending OAK-6077
+
  
 [1]: https://github.com/apache/jackrabbit-oak/tree/trunk/oak-run#console
 [2]: http://search.maven.org/remotecontent?filepath=org/apache/jackrabbit/oak-run/1.6.0/oak-run-1.6.0.jar
