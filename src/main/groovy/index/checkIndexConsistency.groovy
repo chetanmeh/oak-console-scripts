@@ -17,6 +17,9 @@
  * under the License.
  */
 
+package index
+
+
 
 import com.google.common.base.Function
 import com.google.common.base.Stopwatch
@@ -53,10 +56,6 @@ import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFIN
 class IndexConsistencyChecker {
     final Logger log = LoggerFactory.getLogger(getClass())
 
-    final String DESCRIPTION = '''
-Checks consistency for all the Lucene indexes present in a repository.
-This script would require access to the DataStore so that must be configured
-'''
     NodeStore nodeStore
     int validIndexCount = 0
     int invalidIndexCount = 0
