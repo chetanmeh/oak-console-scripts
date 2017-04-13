@@ -18,7 +18,7 @@ Or download it from [here][2]
 Run console and load the script. Standard usage
 
 ```
-java -jar oak-run*.jar console /path/to/segmentstore ":load https://github.com/chetanmeh/oak-console-scripts/blob/master/src/main/groovy/checkIndexConsistency.groovy"
+java -jar oak-run*.jar console /path/to/segmentstore ":load https://github.com/chetanmeh/oak-console-scripts/blob/master/src/main/groovy/repostats/oakRepoStats.groovy"
 ```
 
 This would load the script and execute it and output would be dumped to console. Some scripts
@@ -45,6 +45,11 @@ Usage with Mongo
 ### S3DataStore
 
 S3 support pending OAK-6077
+
+### Provided Scripts
+
+* [Repository Statistics](src/main/groovy/repostats) - Generates useful statistics report for repository content
+* [Index Consistency Checker](src/main/groovy/index) - Checks consistency of Lucene indexes
 
  
 [1]: https://github.com/apache/jackrabbit-oak/tree/trunk/oak-run#console
