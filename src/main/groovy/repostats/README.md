@@ -18,3 +18,4 @@ Load url
 * Read only
 * Does not require DataStore
 * See [readme](../../../../README.md#usage) for usage details 
+* JDK Version 1.8 (mostly tested with 1.8.0_66)
