@@ -52,7 +52,7 @@ Usage with Mongo
 Set system property `-Djline.terminal=jline.UnsupportedTerminal` when running the command via `nohup`
 
 ```
-$ nohup java -Xmx4g -Djline.terminal=jline.UnsupportedTerminal -jar oak-run*.jar console --segment=true /path/to/segmentstore ":load https://github.com/chetanmeh/oak-console-scripts/blob/master/src/main/groovy/repostats/oakRepoStats.groovy" &
+$ nohup java -Xmx4g -Djline.terminal=jline.UnsupportedTerminal -jar oak-run*.jar console --segment=true /path/to/segmentstore ":load https://raw.githubusercontent.com/chetanmeh/oak-console-scripts/master/src/main/groovy/repostats/oakRepoStats.groovy" &
 ```
 
 ### S3DataStore
