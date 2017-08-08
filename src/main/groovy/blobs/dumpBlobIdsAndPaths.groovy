@@ -57,7 +57,6 @@ class BlobIdDumper {
 
     private void dumpBinaryProps(PrintWriter pw, Tree tree){
         tree.properties.each { PropertyState ps ->
-            println "${ps.name} -> ${tree.path}"
             if (ps.getType().tag() == PropertyType.BINARY){
                 if (ps.isArray()){
                     for (int i = 0; i < ps.count(); i++) {
