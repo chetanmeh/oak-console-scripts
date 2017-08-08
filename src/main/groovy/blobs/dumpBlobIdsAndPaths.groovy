@@ -73,7 +73,7 @@ class BlobIdDumper {
         }
 
         if (nodeCount % 10000 == 0) {
-            println "Traversed $nodeCount so far ..."
+            println "Traversed $nodeCount nodes so far ..."
         }
     }
 
@@ -84,7 +84,7 @@ class BlobIdDumper {
             blobCount++
 
             if (blobCount % 1000 == 0) {
-                println "Found $blobCount so far ..."
+                println "=> Found $blobCount blobs so far ..."
             }
         }
     }
