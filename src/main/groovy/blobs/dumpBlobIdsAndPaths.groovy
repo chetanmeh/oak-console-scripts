@@ -17,15 +17,19 @@
  * under the License.
  */
 
+
+import com.google.common.base.Function
 import com.google.common.base.Stopwatch
 import com.google.common.collect.FluentIterable
+import com.google.common.collect.Iterables
 import com.google.common.collect.TreeTraverser
 import groovy.transform.CompileStatic
 import org.apache.jackrabbit.oak.api.Blob
 import org.apache.jackrabbit.oak.api.PropertyState
-import org.apache.jackrabbit.oak.api.Tree
 import org.apache.jackrabbit.oak.api.Type
-import org.apache.jackrabbit.oak.plugins.tree.TreeFactory
+import org.apache.jackrabbit.oak.commons.PathUtils
+import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry
+import org.apache.jackrabbit.oak.spi.state.NodeState
 import org.apache.jackrabbit.oak.spi.state.NodeStore
 
 import javax.jcr.PropertyType
@@ -42,13 +46,12 @@ class BlobIdDumper {
     void dump(){
         Stopwatch w = Stopwatch.createStarted()
         File file = new File(fileName)
-        Tree tree = TreeFactory.createReadOnlyTree(nodeStore.root)
-        def itr = getTreeTraversor(tree)
+        def itr = getTreeTraversor(nodeStore.root)
 
         println "Writing blobId to path mapping to $file"
 
         file.withPrintWriter { pw ->
-            for (Tree t in itr) {
+            for (SimpleTree t in itr) {
                 dumpBinaryProps(pw, t)
             }
         }
@@ -56,9 +59,9 @@ class BlobIdDumper {
         println "Total $blobCount external blobs found in $nodeCount nodes in $w"
     }
 
-    private void dumpBinaryProps(PrintWriter pw, Tree tree){
+    private void dumpBinaryProps(PrintWriter pw, SimpleTree tree){
         nodeCount++
-        tree.properties.each { PropertyState ps ->
+        tree.state.properties.each { PropertyState ps ->
             if (ps.getType().tag() == PropertyType.BINARY){
                 if (ps.isArray()){
                     for (int i = 0; i < ps.count(); i++) {
@@ -77,7 +80,7 @@ class BlobIdDumper {
         }
     }
 
-    private void writeBlobPath(PrintWriter pw, Blob blob, Tree tree) {
+    private void writeBlobPath(PrintWriter pw, Blob blob, SimpleTree tree) {
         String id = blob.contentIdentity
         if (id != null && !id.startsWith(IN_MEM_BLOB_PREFIX)) {
             pw.printf("%s|%s%n", id, tree.path)
@@ -89,13 +92,28 @@ class BlobIdDumper {
         }
     }
 
-    private static FluentIterable<Tree> getTreeTraversor(Tree t){
-        def traversor = new TreeTraverser<Tree>(){
-            Iterable<Tree> children(Tree root) {
-                return root.children
+    private static FluentIterable<SimpleTree> getTreeTraversor(NodeState state){
+        def traversor = new TreeTraverser<SimpleTree>(){
+            Iterable<SimpleTree> children(SimpleTree root) {
+                return root.children()
             }
         }
-        return traversor.preOrderTraversal(t)
+        return traversor.preOrderTraversal(new SimpleTree(state, "/"))
+    }
+
+    private static class SimpleTree {
+        final NodeState state
+        final String path
+
+        SimpleTree(NodeState state, String path){
+            this.state = state
+            this.path = path
+        }
+
+        Iterable<SimpleTree> children(){
+            return Iterables.transform(state.childNodeEntries, {ChildNodeEntry cne ->
+                new SimpleTree(cne.nodeState, PathUtils.concat(path, cne.name))} as Function)
+        }
     }
 }
 
