@@ -36,6 +36,7 @@ class BlobIdDumper {
     String fileName = "blob-paths.txt"
     NodeStore nodeStore
     long blobCount
+    long nodeCount
 
 
     void dump(){
@@ -52,10 +53,11 @@ class BlobIdDumper {
             }
         }
 
-        println "Total $blobCount external blobs found in $w"
+        println "Total $blobCount external blobs found in $nodeCount nodes in $w"
     }
 
     private void dumpBinaryProps(PrintWriter pw, Tree tree){
+        nodeCount++
         tree.properties.each { PropertyState ps ->
             if (ps.getType().tag() == PropertyType.BINARY){
                 if (ps.isArray()){
@@ -69,6 +71,10 @@ class BlobIdDumper {
                 }
             }
         }
+
+        if (nodeCount % 10000 == 0) {
+            println "Traversed $nodeCount so far ..."
+        }
     }
 
     private void writeBlobPath(PrintWriter pw, Blob blob, Tree tree) {
@@ -76,6 +82,10 @@ class BlobIdDumper {
         if (id != null && !id.startsWith(IN_MEM_BLOB_PREFIX)) {
             pw.printf("%s|%s%n", id, tree.path)
             blobCount++
+
+            if (blobCount % 1000 == 0) {
+                println "Found $blobCount so far ..."
+            }
         }
     }
 
