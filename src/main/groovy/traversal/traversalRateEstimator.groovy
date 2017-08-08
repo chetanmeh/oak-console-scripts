@@ -55,9 +55,14 @@ class TraversalRateEstimator {
 
     def tick(DBObject obj){
         meter.mark()
+        String id = obj.get("_id")
+
+        if (!id.contains("oak:index")){
+            println "[$watch] Traversed #$traversalCount $id"
+        }
         if (++traversalCount % 10000 == 0) {
             double rate = meter.getFiveMinuteRate()
-            String id = obj.get("_id")
+
             String formattedRate = String.format("%1.2f nodes/s, %1.2f nodes/hr", rate, rate * 3600)
             println "[$watch] Traversed #$traversalCount $id [$formattedRate]"
         }
