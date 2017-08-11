@@ -23,7 +23,7 @@ Or download it from [here][2]
 Run console and load the script. Standard usage
 
 ```
-java -jar oak-run*.jar console /path/to/segmentstore ":load https://github.com/chetanmeh/oak-console-scripts/blob/master/src/main/groovy/repostats/oakRepoStats.groovy"
+java -jar oak-run*.jar console /path/to/segmentstore ":load https://raw.githubusercontent.com/chetanmeh/oak-console-scripts/master/src/main/groovy/repostats/oakRepoStats.groovy"
 ```
 
 This would load the script and execute it and output would be dumped to console. Some scripts
