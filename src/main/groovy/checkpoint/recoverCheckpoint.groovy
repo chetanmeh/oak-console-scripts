@@ -76,7 +76,7 @@ class CheckpointRecovery {
     }
 
     def printCheckPointCommand(String name, String cp) {
-        def expiry = String.valueOf(TimeUnit.DAYS.toMillis(300))
+        def expiry = String.valueOf(TimeUnit.DAYS.toMillis(1000))
 
         printCommand("AEM 6.0/Oak 1.0.x", createCommand(cp, expiry))
 
