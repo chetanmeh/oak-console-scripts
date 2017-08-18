@@ -1,0 +1,11 @@
+.settings
+.classpath
+.project
+target
+.idea
+*.ipr
+*.iws
+*.iml
+atlassian-ide-plugin.xml
+.checkstyle
+derby.log
