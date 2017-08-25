@@ -32,6 +32,7 @@ import org.apache.jackrabbit.JcrConstants
 import org.apache.jackrabbit.oak.api.*
 import org.apache.jackrabbit.oak.commons.PathUtils
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexLookup
+import org.apache.jackrabbit.oak.plugins.memory.PropertyValues
 import org.apache.jackrabbit.oak.plugins.tree.RootFactory
 import org.apache.jackrabbit.oak.plugins.tree.TreeFactory
 import org.apache.jackrabbit.oak.query.NodeStateNodeTypeInfoProvider
@@ -40,7 +41,6 @@ import org.apache.jackrabbit.oak.query.ast.NodeTypeInfo
 import org.apache.jackrabbit.oak.query.ast.NodeTypeInfoProvider
 import org.apache.jackrabbit.oak.query.ast.SelectorImpl
 import org.apache.jackrabbit.oak.query.index.FilterImpl
-import org.apache.jackrabbit.oak.spi.query.PropertyValues
 import org.apache.jackrabbit.oak.spi.state.NodeState
 import org.apache.jackrabbit.oak.spi.state.NodeStateUtils
 import org.apache.jackrabbit.oak.spi.state.NodeStore
