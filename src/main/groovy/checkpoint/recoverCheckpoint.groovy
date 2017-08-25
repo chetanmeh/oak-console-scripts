@@ -20,7 +20,9 @@
 
 import groovy.json.JsonOutput
 import org.apache.jackrabbit.oak.commons.json.JsopBuilder
+import org.apache.jackrabbit.oak.plugins.document.ClusterNodeInfoDocument
 import org.apache.jackrabbit.oak.plugins.document.DocumentNodeState
+import org.apache.jackrabbit.oak.plugins.document.DocumentNodeStore
 import org.apache.jackrabbit.oak.plugins.document.Revision
 import org.apache.jackrabbit.oak.plugins.document.RevisionVector
 import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection
@@ -33,15 +35,28 @@ import org.apache.jackrabbit.util.ISO8601
 import java.util.concurrent.TimeUnit
 
 class CheckpointRecovery {
+    enum OakVersion {
+        V_1_6("AEM 6.3/Oak 1.6.x"),
+        V_1_4("AEM 6.2/Oak 1.4.x"),
+        V_1_2("AEM 6.1/Oak 1.2.x"),
+        V_1_0("AEM 6.0/Oak 1.0.x"),
+        UNKNOWN("Unknown")
+
+        final String desc
+
+        private OakVersion(String desc) {
+            this.desc = desc
+        }
+    }
     NodeStore nodeStore
     Whiteboard whiteboard
-    int noOfClusterNodes = System.getProperty("clusterNodeCount", "-1") as int
     String dbname
+    OakVersion oakVersion
+    boolean testMode = Boolean.getBoolean("testMode")
 
     def execute() {
-        noOfClusterNodes = computeNoOfClusterNodes()
-        println "Number of cluster nodes found $noOfClusterNodes"
-
+        oakVersion = determineOakVersion()
+        println "Oak version detected as ${oakVersion.desc}"
         dbname = determineDbName()
 
         Map<String, String> cps = asyncCheckpoints()
@@ -49,7 +64,7 @@ class CheckpointRecovery {
         boolean checkpointMissing = false
         cps.each { name, cp ->
             NodeState cpState = nodeStore.retrieve(cp)
-            if (cpState == null) {
+            if (cpState == null || testMode) {
                 checkpointMissing = true
                 println "[$name] Referred checkpoint $cp found to be missed"
                 printCheckPointCommand(name, cp)
@@ -62,30 +77,46 @@ class CheckpointRecovery {
 
     }
 
+    OakVersion determineOakVersion() {
+        DocumentNodeStore dns = nodeStore as DocumentNodeStore
+
+        OakVersion ov = OakVersion.UNKNOWN
+        ClusterNodeInfoDocument.all(dns.getDocumentStore()).each { doc ->
+            String version = doc.get("oakVersion") as String
+            if (ov == OakVersion.UNKNOWN && version != null) {
+                println "Oak version from DB is $version"
+                if (version.startsWith("1.6")){
+                    ov = OakVersion.V_1_6
+                } else if (version.startsWith("1.4")){
+                    ov = OakVersion.V_1_4
+                } else if (version.startsWith("1.2")){
+                    ov = OakVersion.V_1_2
+                } else if (version.startsWith("1.0")){
+                    ov = OakVersion.V_1_0
+                }
+            }
+        }
+
+        return ov
+    }
+
     String determineDbName() {
         MongoConnection mc = WhiteboardUtils.getService(whiteboard, MongoConnection.class)
         assert mc
         return mc.DB.name
     }
 
-    def computeNoOfClusterNodes() {
-        DocumentNodeState dns = nodeStore.root as DocumentNodeState
-        int count = 0
-        dns.rootRevision.each {Revision r -> if (r.clusterId != 0) count++}
-        return count
-    }
-
     def printCheckPointCommand(String name, String cp) {
         def expiry = String.valueOf(TimeUnit.DAYS.toMillis(1000))
 
-        printCommand("AEM 6.0/Oak 1.0.x", createCommand(cp, expiry))
+        printCommand(OakVersion.V_1_0, createCommand(cp, expiry))
 
         def attrs = new LinkedHashMap() //Ensure that expires is first entry
         attrs['expires'] = expiry
         attrs['creator'] = 'AsyncIndexUpdate'
         attrs['thread'] = 'sling-oak-3-Registered Service.826'
 
-        printCommand("AEM 6.1/Oak 1.2.x", createCommand(cp, JsonOutput.toJson(attrs)))
+        printCommand(OakVersion.V_1_2, createCommand(cp, JsonOutput.toJson(attrs)))
 
         //Recreate the map to ensure rv is second entry
         attrs = new LinkedHashMap()
@@ -94,19 +125,41 @@ class CheckpointRecovery {
         attrs['creator'] = 'AsyncIndexUpdate'
         attrs['thread'] = 'sling-oak-3-Registered Service.826'
         attrs['name'] = name
-        printCommand("AEM 6.2/Oak 1.4.x", createCommand(cp, JsonOutput.toJson(attrs)))
+        printCommand(OakVersion.V_1_4, createCommand(cp, JsonOutput.toJson(attrs)))
 
         attrs['created'] = ISO8601.format(Calendar.getInstance())
-        printCommand("AEM 6.3/Oak 1.6.x", createCommand(cp, JsonOutput.toJson(attrs)))
+        printCommand(OakVersion.V_1_6, createCommand(cp, JsonOutput.toJson(attrs)))
     }
 
     def createRevVector(String cp) {
         Revision r = Revision.fromString(cp)
-        def revs = (1..noOfClusterNodes).collect { clusterId -> new Revision(r.timestamp, r.counter, clusterId) }
+        DocumentNodeState docState = nodeStore.root as DocumentNodeState
+
+        def revs = []
+        docState.rootRevision.each {Revision rr ->
+            int clusterId = rr.clusterId
+            long timeStamp = Math.min(r.timestamp, rr.timestamp)
+
+            //For read only connection the root rev vector is min of dimension 2
+            //with 1 from clusterId 0 so exclude that
+            if (clusterId != 0) {
+                revs << new Revision(timeStamp, r.counter, clusterId)
+            }
+        }
         return new RevisionVector(revs).toString()
     }
 
-    def printCommand(String versionInfo, String command) {
+    private void printCommand(OakVersion ov, String command) {
+        //oakVersion support was present in 1.0.19, 1.2.4 and 1.4 or newer
+        //So unknown case is only for 1.0 and 1.2
+        if (oakVersion == OakVersion.UNKNOWN && ( ov == OakVersion.V_1_0 || ov == OakVersion.V_1_2)){
+            printCommand(ov.desc, command)
+        } else if (oakVersion == ov){
+            printCommand(ov.desc, command)
+        }
+    }
+
+    private static void printCommand(String versionInfo, String command) {
         println "Command for version : $versionInfo"
         println(command)
         println()
