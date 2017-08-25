@@ -114,7 +114,7 @@ class CheckpointRecovery {
         def attrs = new LinkedHashMap() //Ensure that expires is first entry
         attrs['expires'] = expiry
         attrs['creator'] = 'AsyncIndexUpdate'
-        attrs['thread'] = 'sling-oak-3-Registered Service.826'
+        attrs['thread'] = 'recoverCheckpoint'
 
         printCommand(OakVersion.V_1_2, createCommand(cp, JsonOutput.toJson(attrs)))
 
@@ -123,7 +123,7 @@ class CheckpointRecovery {
         attrs['expires'] = expiry
         attrs['rv'] = createRevVector(cp) //Keep rev as second entry
         attrs['creator'] = 'AsyncIndexUpdate'
-        attrs['thread'] = 'sling-oak-3-Registered Service.826'
+        attrs['thread'] = 'recoverCheckpoint'
         attrs['name'] = name
         printCommand(OakVersion.V_1_4, createCommand(cp, JsonOutput.toJson(attrs)))
 
