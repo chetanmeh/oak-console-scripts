@@ -42,7 +42,6 @@ import org.apache.jackrabbit.oak.commons.sort.StringSort
 import org.apache.jackrabbit.oak.plugins.blob.datastore.InMemoryDataRecord
 import org.apache.jackrabbit.oak.plugins.tree.TreeFactory
 import org.apache.jackrabbit.oak.spi.state.NodeStore
-import org.apache.jackrabbit.oak.util.TreeUtil
 
 import javax.jcr.PropertyType
 import java.util.concurrent.TimeUnit
@@ -113,7 +112,7 @@ class RepoStats {
     def dumpStats(){
         init()
         Tree root = TreeFactory.createReadOnlyTree(nodeStore.root)
-        root = TreeUtil.getTree(root, rootPath)
+        root = getTree(root, rootPath)
         getFilteringTraversor(root).each { Tree t ->
             def path = t.path
             if (path.endsWith('oak:index')){
@@ -142,6 +141,20 @@ class RepoStats {
         statsWritten = true
     }
 
+    Tree getTree(Tree tree, String path) {
+        for (String element : PathUtils.elements(path)) {
+            if (PathUtils.denotesParent(element)) {
+                if (tree.isRoot()) {
+                    return null
+                } else {
+                    tree = tree.getParent()
+                }
+            } else if (!PathUtils.denotesCurrent(element)) {
+                tree = tree.getChild(element)
+            }  // else . -> skip to next element
+        }
+        return tree
+    }
 
     def init() {
         useChildNodeCount = nodeStore.root.class.name.endsWith("SegmentNodeState")
