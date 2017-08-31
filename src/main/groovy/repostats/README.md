@@ -14,8 +14,11 @@ This would read the repo and generate 2 files which contains various stats relat
 Load url
 
     oak-run.jar console /path/to/segmentstore ":load https://raw.githubusercontent.com/chetanmeh/oak-console-scripts/master/src/main/groovy/repostats/oakRepoStats.groovy"
-    
+  
+* Download [oak-run-1.7.6][1] - This can connect to older versions of AEM
 * Read only
 * Does not require DataStore
 * See [readme](../../../../README.md#usage) for usage details 
 * JDK Version 1.8 (mostly tested with 1.8.0_66)
+
+[1]: http://repo1.maven.org/maven2/org/apache/jackrabbit/oak-run/1.7.6/oak-run-1.7.6.jar
