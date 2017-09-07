@@ -17,45 +17,47 @@
  * under the License.
  */
 
+package traversal
+
+
 import com.codahale.metrics.Meter
 import com.codahale.metrics.MetricRegistry
 import com.google.common.base.Stopwatch
-import com.mongodb.DBCollection
-import com.mongodb.DBCursor
-import com.mongodb.DBObject
+import com.google.common.collect.FluentIterable
+import com.google.common.collect.TreeTraverser
 import groovy.transform.CompileStatic
-import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection
+import org.apache.jackrabbit.oak.api.Tree
+import org.apache.jackrabbit.oak.plugins.tree.TreeFactory
+import org.apache.jackrabbit.oak.spi.state.NodeStore
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard
 import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils
 
 @CompileStatic
-class TraversalRateEstimator {
-    final MongoConnection conn
+class NodeStoreTraversalRateEstimator {
+    final NodeStore store
     final Meter meter
     final Stopwatch watch = Stopwatch.createStarted()
     long traversalCount = 0
 
-    TraversalRateEstimator(Whiteboard wb){
-        conn = WhiteboardUtils.getService(wb, MongoConnection.class)
+    NodeStoreTraversalRateEstimator(Whiteboard wb, NodeStore ns){
+        this.store = ns
         MetricRegistry registry = WhiteboardUtils.getService(wb, MetricRegistry.class)
         assert registry : "Use --metrics option to enable metrics for this script"
         meter = registry.meter("traversal-meter")
     }
 
     def readAll(){
-        DBCollection col = conn.DB.getCollection("nodes")
+        Tree root = TreeFactory.createReadOnlyTree(store.root)
 
-        DBCursor cursor = col.find()
-        while (cursor.hasNext()) {
-            DBObject obj = cursor.next()
-            tick(obj)
+        getTreeTraversor(root).each{ Tree t ->
+            tick(t)
         }
         println "Done traversal of $traversalCount"
     }
 
-    def tick(DBObject obj){
+    def tick(Tree t){
         meter.mark()
-        String id = obj.get("_id")
+        String id = t.path
 
         if (++traversalCount % 10000 == 0) {
             double rate = meter.getFiveMinuteRate()
@@ -64,7 +66,16 @@ class TraversalRateEstimator {
             println "[$watch] Traversed #$traversalCount $id [$formattedRate]"
         }
     }
+
+    static FluentIterable<Tree> getTreeTraversor(Tree t){
+        def traversor = new TreeTraverser<Tree>(){
+            Iterable<Tree> children(Tree root) {
+                return root.children
+            }
+        }
+        return traversor.preOrderTraversal(t)
+    }
 }
 
-new TraversalRateEstimator(session.whiteboard).readAll()
+new NodeStoreTraversalRateEstimator(session.whiteboard, session.store).readAll()
 
