@@ -17,8 +17,6 @@
  * under the License.
  */
 
-package traversal
-
 
 import com.codahale.metrics.Meter
 import com.codahale.metrics.MetricRegistry
