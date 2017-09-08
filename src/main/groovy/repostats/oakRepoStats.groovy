@@ -20,10 +20,12 @@
 
 import com.codahale.metrics.ConsoleReporter
 import com.codahale.metrics.MetricRegistry
+import com.google.common.base.Function
 import com.google.common.base.Predicate
 import com.google.common.base.Stopwatch
 import com.google.common.collect.AbstractIterator
 import com.google.common.collect.FluentIterable
+import com.google.common.collect.Iterables
 import com.google.common.collect.Iterators
 import com.google.common.collect.PeekingIterator
 import com.google.common.collect.Sets
@@ -40,7 +42,8 @@ import org.apache.jackrabbit.oak.api.Type
 import org.apache.jackrabbit.oak.commons.PathUtils
 import org.apache.jackrabbit.oak.commons.sort.StringSort
 import org.apache.jackrabbit.oak.plugins.blob.datastore.InMemoryDataRecord
-import org.apache.jackrabbit.oak.plugins.tree.TreeFactory
+import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry
+import org.apache.jackrabbit.oak.spi.state.NodeState
 import org.apache.jackrabbit.oak.spi.state.NodeStore
 
 import javax.jcr.PropertyType
@@ -111,7 +114,7 @@ class RepoStats {
 
     def dumpStats(){
         init()
-        Tree root = TreeFactory.createReadOnlyTree(nodeStore.root)
+        Tree root = createReadOnlyTree(nodeStore.root)
         root = getTree(root, rootPath)
         getFilteringTraversor(root).each { Tree t ->
             def path = t.path
@@ -606,7 +609,7 @@ class RepoStats {
     @CompileStatic(TypeCheckingMode.SKIP)
     static Iterable<PropertyState> getProps(Tree t){
         //Workaround Groovy compiler issue
-        return t.properties
+        return t.getProperties()
     }
 
     //~-----------------------------------------------------< Index Statistics >
@@ -1068,6 +1071,135 @@ ${columns.collect{ " <%print \"_\"*$it.size %> " }.join()}
 
     static String withSizeSuffix(long size){
         humanReadableByteCount(size)
+    }
+
+    //~--------------------------------------< SimpleTree >
+
+    static Tree createReadOnlyTree(NodeState state) {
+        new SimpleTree(state, PathUtils.ROOT_PATH, null)
+    }
+
+    /**
+     * Custom tree implementation as default Tree impl first fetches all child node names and then
+     * fetches the child nodestates which performs poorly for flat list
+     */
+    private static class SimpleTree implements Tree{
+        final NodeState state
+        final String path
+        final SimpleTree parent
+
+        SimpleTree(NodeState state, String path, SimpleTree parent){
+            this.state = state
+            this.path = path
+            this.parent = parent
+        }
+
+        @Override
+        String getName() {
+            return PathUtils.getName(path)
+        }
+
+        @Override
+        boolean isRoot() {
+            return PathUtils.denotesRoot(path)
+        }
+
+        @Override
+        Tree.Status getStatus() {
+            return Tree.Status.UNCHANGED
+        }
+
+        @Override
+        boolean exists() {
+            return true
+        }
+
+        @Override
+        Tree getParent() {
+            return parent
+        }
+
+        @Override
+        Tree.Status getPropertyStatus(String name) {
+            return Tree.Status.UNCHANGED
+        }
+
+        @Override
+        boolean hasProperty(String name) {
+            return state.hasProperty(name)
+        }
+
+        @Override
+        PropertyState getProperty(String name){
+            return state.getProperty(name)
+        }
+
+        @Override
+        long getPropertyCount() {
+            return state.getPropertyCount()
+        }
+
+        @Override
+        Iterable<? extends PropertyState> getProperties() {
+            return state.properties
+        }
+
+        @Override
+        Tree getChild(String name) throws IllegalArgumentException {
+            return new SimpleTree(state.getChildNode(name), PathUtils.concat(this.path, name), this)
+        }
+
+        @Override
+        boolean hasChild(String name) {
+            return state.hasChildNode(name)
+        }
+
+        @Override
+        long getChildrenCount(long max) {
+            return state.getChildNodeCount(max)
+        }
+
+        @Override
+        Iterable<Tree> getChildren() {
+            return Iterables.transform(state.childNodeEntries, { ChildNodeEntry cne ->
+                new SimpleTree(cne.nodeState, PathUtils.concat(path, cne.name), this)} as Function)
+        }
+
+        @Override
+        boolean remove() {
+            throw new UnsupportedOperationException()
+        }
+
+        @Override
+        Tree addChild(String name) throws IllegalArgumentException {
+            throw new UnsupportedOperationException()
+        }
+
+        @Override
+        void setOrderableChildren(boolean enable) {
+            throw new UnsupportedOperationException()
+        }
+
+        @Override
+        boolean orderBefore(String name) {
+            throw new UnsupportedOperationException()
+        }
+
+        @Override
+        void setProperty(PropertyState property) {
+            throw new UnsupportedOperationException()
+        }
+
+        @Override
+        <T> void setProperty(
+                String name, T value, Type<T> type) throws IllegalArgumentException {
+            throw new UnsupportedOperationException()
+        }
+
+        @Override
+        void removeProperty(String name) {
+            throw new UnsupportedOperationException()
+        }
     }
 }
 
