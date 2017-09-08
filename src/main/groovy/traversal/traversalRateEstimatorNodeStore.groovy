@@ -20,12 +20,15 @@
 
 import com.codahale.metrics.Meter
 import com.codahale.metrics.MetricRegistry
+import com.google.common.base.Function
 import com.google.common.base.Stopwatch
 import com.google.common.collect.FluentIterable
+import com.google.common.collect.Iterables
 import com.google.common.collect.TreeTraverser
 import groovy.transform.CompileStatic
-import org.apache.jackrabbit.oak.api.Tree
-import org.apache.jackrabbit.oak.plugins.tree.TreeFactory
+import org.apache.jackrabbit.oak.commons.PathUtils
+import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry
+import org.apache.jackrabbit.oak.spi.state.NodeState
 import org.apache.jackrabbit.oak.spi.state.NodeStore
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard
 import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils
@@ -45,15 +48,13 @@ class NodeStoreTraversalRateEstimator {
     }
 
     def readAll(){
-        Tree root = TreeFactory.createReadOnlyTree(store.root)
-
-        getTreeTraversor(root).each{ Tree t ->
+        getTreeTraversor(store.root).each{ SimpleTree t ->
             tick(t)
         }
         println "Done traversal of $traversalCount"
     }
 
-    def tick(Tree t){
+    def tick(SimpleTree t){
         meter.mark()
         String id = t.path
 
@@ -65,13 +66,28 @@ class NodeStoreTraversalRateEstimator {
         }
     }
 
-    static FluentIterable<Tree> getTreeTraversor(Tree t){
-        def traversor = new TreeTraverser<Tree>(){
-            Iterable<Tree> children(Tree root) {
-                return root.children
+    private static FluentIterable<SimpleTree> getTreeTraversor(NodeState state){
+        def traversor = new TreeTraverser<SimpleTree>(){
+            Iterable<SimpleTree> children(SimpleTree root) {
+                return root.children()
             }
         }
-        return traversor.preOrderTraversal(t)
+        return traversor.preOrderTraversal(new SimpleTree(state, "/"))
+    }
+
+    private static class SimpleTree {
+        final NodeState state
+        final String path
+
+        SimpleTree(NodeState state, String path){
+            this.state = state
+            this.path = path
+        }
+
+        Iterable<SimpleTree> children(){
+            return Iterables.transform(state.childNodeEntries, { ChildNodeEntry cne ->
+                new SimpleTree(cne.nodeState, PathUtils.concat(path, cne.name))} as Function)
+        }
     }
 }
 
