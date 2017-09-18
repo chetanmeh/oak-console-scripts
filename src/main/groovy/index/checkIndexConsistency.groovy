@@ -17,8 +17,6 @@
  * under the License.
  */
 
-package index
-
 
 
 import com.google.common.base.Function
