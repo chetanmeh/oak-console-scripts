@@ -16,7 +16,7 @@ data via [script][import-via-script]. The said script is implemented by
 # Usage
 
 1. Do out of band indexing as described [here][oob-indexing]
-1. Start up the setup where the index needs to be imported
+1. Start up the setup where the index needs to be imported if it's not online
 1. Use `IndexStats` MBean to `abortAndPause()` all async lanes that
 are to be imported
 1. Verify that indexing is indeed paused by watching that there are no
@@ -29,6 +29,7 @@ to point to index generated in Step1
 1. Execute the script
 1. The output panel of script console should describe what the script
 did and report error, if any
+   * For setups using oak older than 1.6, the output might show `Unable to create uniqe id`. That is expected and is ok.
 1. Verify that the index is caught up and results are consistent
 1. Resume async indexing via `IndexStats` MBean for lanes which were
 paused in Step3
