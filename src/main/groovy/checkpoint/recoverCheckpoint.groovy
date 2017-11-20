@@ -107,7 +107,7 @@ class CheckpointRecovery {
     }
 
     def printCheckPointCommand(String name, String cp) {
-        def expiry = String.valueOf(TimeUnit.DAYS.toMillis(1000))
+        def expiry = String.valueOf(new Date().getTime() + TimeUnit.DAYS.toMillis(1000))
 
         printCommand(OakVersion.V_1_0, createCommand(cp, expiry))
 

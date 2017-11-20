@@ -30,7 +30,7 @@ import org.apache.jackrabbit.JcrConstants
 import org.apache.jackrabbit.oak.api.*
 import org.apache.jackrabbit.oak.commons.PathUtils
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexLookup
-import org.apache.jackrabbit.oak.plugins.memory.PropertyValues
+import org.apache.jackrabbit.oak.spi.query.PropertyValues
 import org.apache.jackrabbit.oak.plugins.tree.RootFactory
 import org.apache.jackrabbit.oak.plugins.tree.TreeFactory
 import org.apache.jackrabbit.oak.query.NodeStateNodeTypeInfoProvider
@@ -64,7 +64,8 @@ class IndexConsistencyChecker {
         Root root = RootFactory.createReadOnlyRoot(nodeStore.root)
 
         indexPaths.each {String path ->
-            path = PathUtils.concat('/', path)
+            //path = PathUtils.concat('/', path)
+            println path
             Tree idx = root.getTree(path)
             if (idx.getProperty('type').getValue(Type.STRING) == 'lucene'){
                 checkConsistency(idx)
@@ -140,22 +141,10 @@ class IndexConsistencyChecker {
     }
 
     private Iterable<String> getIndexDefnPaths(){
-        NodeState nodeType = NodeStateUtils.getNode(nodeStore.root, '/oak:index/nodetype')
-
-        //Check if oak:QueryIndexDefinition is indexed as part of nodetype index
-        if (Iterables.contains(nodeType.getNames(DECLARING_NODE_TYPES), INDEX_DEFINITIONS_NODE_TYPE)){
-            println "Loading index definitions paths from NodeType index"
-            PropertyIndexLookup pil = new PropertyIndexLookup(nodeStore.root)
-            return pil.query(createFilter(INDEX_DEFINITIONS_NODE_TYPE),
-                    JcrConstants.JCR_PRIMARYTYPE,
-                    PropertyValues.newName([INDEX_DEFINITIONS_NODE_TYPE]))
-        } else {
-            //Else just check the root indexes
-            Tree nodeTypeTree = TreeFactory.createReadOnlyTree(nodeType)
-            return Iterables.transform(nodeTypeTree.children, {Tree t -> t.path} as Function)
-        }
+        Tree root = TreeFactory.createReadOnlyTree(nodeStore.root)
+        return Iterables.transform(root.getChild("oak:index").children, {Tree t -> t.path} as Function) 
     }
-
+    
     private FilterImpl createFilter(String nodeTypeName) {
         NodeTypeInfoProvider nodeTypes = new NodeStateNodeTypeInfoProvider(nodeStore.root)
         NodeTypeInfo type = nodeTypes.getNodeTypeInfo(nodeTypeName)
@@ -180,5 +169,4 @@ class IndexConsistencyChecker {
 }
 
 new IndexConsistencyChecker(nodeStore: session.store).check()
-
 
