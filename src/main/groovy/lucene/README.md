@@ -5,7 +5,7 @@ Dumps lucene index contents in a file named `index-contents.txt`. This can be us
 compare 2 index dumps. This is done by un inverting the index in memory. So ensure that for large indexes
 the processing is given sufficient heap 
 
-    java -DindexPath=/path/to/lucene/index -jar oak-run*.jar console /path/to/segmentstore ":load https://github.com/chetanmeh/oak-console-scripts/blob/master/src/main/groovy/index/luceneIndexDumper.groovy"
+    java -DindexPath=/path/to/lucene/index -jar oak-run*.jar console /path/to/segmentstore ":load https://raw.githubusercontent.com/chetanmeh/oak-console-scripts/master/src/main/groovy/lucene/luceneIndexDumper.groovy"
     
 Where 
 
