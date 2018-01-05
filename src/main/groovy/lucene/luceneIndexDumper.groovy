@@ -36,6 +36,8 @@ import org.apache.lucene.store.Directory
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.util.Bits
 
+import java.util.stream.Collectors
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -100,16 +102,22 @@ class LuceneIndexContentDumper{
             Terms terms = fields.terms(fieldName)
             TermsEnum termsEnum = terms.iterator(null)
 
+            int termCount = 0
             while (termsEnum.next() != null) {
+                termCount++
                 DocsEnum docsEnum = termsEnum.docs(liveDocs, null, DocsEnum.FLAG_NONE)
                 while(docsEnum.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
                     int docId = docsEnum.docID()
                     DocInfo di = infos.get(docId)
                     assert di : "No DocInfo for docId : $docId"
-                    di.fieldIds << getFieldId(fieldName)
+                    di.addFieldId(getFieldId(fieldName))
                 }
             }
+
+            println "Processed field - $fieldName, termCount = $termCount"
         }
+        println "Number of fields - ${fieldIdMapping.size()}"
+        println "${fieldIdMapping.keySet()}"
     }
 
     def collectPaths(DirectoryReader reader) {
@@ -148,12 +156,18 @@ class LuceneIndexContentDumper{
     @TupleConstructor
     static class DocInfo {
         final String path
-        Set<Integer> fieldIds = new HashSet<>()
+        BitSet fieldIds = new BitSet()
 
         String toString(){
-            List<String> names = fieldIds.collect {LuceneIndexContentDumper.getField(it)}
-            Collections.sort(names)
+            List<String> names = fieldIds.stream()
+                    .mapToObj({LuceneIndexContentDumper.getField(it)})
+                    .sorted()
+                    .collect(Collectors.toList())
             return "$path|${names.join(',')}"
+        }
+
+        void addFieldId(Integer id){
+            this.fieldIds.set(id)
         }
     }
 }
