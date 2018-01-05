@@ -17,11 +17,14 @@
  * under the License.
  */
 
+
+import com.google.common.base.Charsets
 import com.google.common.base.Stopwatch
 import com.google.common.collect.BiMap
 import com.google.common.collect.HashBiMap
+import com.google.common.primitives.UnsignedBytes
 import groovy.transform.CompileStatic
-import groovy.transform.TupleConstructor
+import groovy.transform.TypeCheckingMode
 import org.apache.jackrabbit.oak.plugins.index.lucene.FieldNames
 import org.apache.lucene.document.Document
 import org.apache.lucene.index.DirectoryReader
@@ -88,7 +91,7 @@ class LuceneIndexContentDumper{
 
     def dumpDocInfo(File file) {
         file.withPrintWriter { pw ->
-            infos.sort {it.path}
+            infos.sort ()
             infos.each {pw.println(it)}
         }
     }
@@ -153,21 +156,29 @@ class LuceneIndexContentDumper{
         return id
     }
 
-    @TupleConstructor
-    static class DocInfo {
-        final String path
-        BitSet fieldIds = new BitSet()
+    static class DocInfo implements Comparable<DocInfo>{
+        final byte[] pathBytes
+        final BitSet fieldIds = new BitSet()
+
+        DocInfo(String path){
+            this.pathBytes = path.getBytes(Charsets.UTF_8)
+        }
 
         String toString(){
             List<String> names = fieldIds.stream()
                     .mapToObj({LuceneIndexContentDumper.getField(it)})
                     .sorted()
                     .collect(Collectors.toList())
-            return "$path|${names.join(',')}"
+            return "${new String(pathBytes, Charsets.UTF_8)}|${names.join(',')}"
         }
 
         void addFieldId(Integer id){
             this.fieldIds.set(id)
+        }
+
+        @CompileStatic(TypeCheckingMode.SKIP)
+        int compareTo(DocInfo o) {
+            return UnsignedBytes.lexicographicalComparator().compare(pathBytes, o.pathBytes)
         }
     }
 }
