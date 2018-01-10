@@ -17,20 +17,19 @@
  * under the License.
  */
 
-
-import com.google.common.base.Charsets
+import com.google.common.base.Joiner
 import com.google.common.base.Stopwatch
-import com.google.common.collect.BiMap
-import com.google.common.collect.HashBiMap
-import com.google.common.primitives.UnsignedBytes
+import com.google.common.collect.AbstractIterator
+import com.google.common.collect.Iterators
+import com.google.common.collect.Lists
+import com.google.common.collect.PeekingIterator
+import com.google.common.collect.Sets
 import groovy.transform.CompileStatic
-import groovy.transform.TypeCheckingMode
+import org.apache.commons.io.FileUtils
 import org.apache.jackrabbit.oak.plugins.index.lucene.FieldNames
-import org.apache.lucene.document.Document
 import org.apache.lucene.index.DirectoryReader
 import org.apache.lucene.index.DocsEnum
 import org.apache.lucene.index.Fields
-import org.apache.lucene.index.IndexableField
 import org.apache.lucene.index.MultiFields
 import org.apache.lucene.index.Terms
 import org.apache.lucene.index.TermsEnum
@@ -38,100 +37,86 @@ import org.apache.lucene.search.DocIdSetIterator
 import org.apache.lucene.store.Directory
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.util.Bits
+import org.apache.lucene.util.FixedBitSet
 
-import java.util.stream.Collectors
-
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
+import static com.google.common.base.Charsets.UTF_8
+import static org.apache.jackrabbit.oak.commons.sort.ExternalSort.mergeSortedFiles
+import static org.apache.jackrabbit.oak.commons.sort.ExternalSort.sortInBatch
 
 @CompileStatic
 class LuceneIndexContentDumper{
     final String INDEX_PATH = "indexPath"
-    private ArrayList<DocInfo> infos
-    private static final BiMap<String, Integer> fieldIdMapping = HashBiMap.create()
+    final int MAX_TMP_FILES = 1024
+    final long MAX_MEMOERY = 1*1024*1024*1024
 
-    def dump(){
+    static final Set<String> ignoredFields = Sets.newHashSet(":ancestors", ":depth", ":path")
+
+    def dump() {
         File indexDir = getIndexDir()
         Directory dir = FSDirectory.open(indexDir)
         DirectoryReader reader = DirectoryReader.open(dir)
 
-        println "Proceeding to dump index contents from ${indexDir.absolutePath}"
 
         Stopwatch w = Stopwatch.createStarted()
-        File dumpFile = new File("index-contents.txt")
+        File dumpFile = new File("index-contents.tmp.txt")
+        File sortedDumpFile = new File("index-contents.txt")
 
+        println "Iterating fields"
         reader.withCloseable {
-            def numDocs = reader.numDocs()
-            println "Collecting data for ${numDocs} docs"
-            infos = new ArrayList<>(numDocs)
+            int numDocs = collectFields(dumpFile, reader)
 
-            collectPaths(reader)
-            collectFieldNames(reader)
-            dumpDocInfo(dumpFile)
-
-            println "Dumped $numDocs documents contents in json format to ${dumpFile.absolutePath} in $w"
+            println "Dumped $numDocs documents contents to ${dumpFile.absolutePath} in $w"
         }
+
+        Comparator<String> fileComparator = new Comparator<String>() {
+            @Override
+            int compare(String s1, String s2) {
+                return s1.substring(0, s1.indexOf('|')).compareTo(s2.substring(0, s2.indexOf('|')))
+            }
+        }
+
+        w.reset()
+        w.start()
+        println "Going to sort"
+        mergeSortedFiles(
+                sortInBatch(dumpFile, fileComparator, MAX_TMP_FILES, MAX_MEMOERY, UTF_8, null, false),
+                sortedDumpFile, fileComparator)
+        println "Sorted output put in ${sortedDumpFile.absolutePath} in $w"
+
+        FileUtils.deleteQuietly(dumpFile)
     }
 
-    def dumpDocInfo(File file) {
-        file.withPrintWriter { pw ->
-            infos.sort ()
-            infos.each {pw.println(it)}
-        }
-    }
-
-    def collectFieldNames(DirectoryReader reader) {
-        println "Proceeding to collect the field names per document"
-
+    int collectFields(File file, DirectoryReader reader) {
         Bits liveDocs = MultiFields.getLiveDocs(reader)
         Fields fields = MultiFields.getFields(reader)
-        fields.each {String fieldName ->
-            Terms terms = fields.terms(fieldName)
-            TermsEnum termsEnum = terms.iterator(null)
 
-            int termCount = 0
-            while (termsEnum.next() != null) {
-                termCount++
-                DocsEnum docsEnum = termsEnum.docs(liveDocs, null, DocsEnum.FLAG_NONE)
-                while(docsEnum.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
-                    int docId = docsEnum.docID()
-                    DocInfo di = infos.get(docId)
-                    assert di : "No DocInfo for docId : $docId"
-                    di.addFieldId(getFieldId(fieldName))
-                }
-            }
-
-            println "Processed field - $fieldName, termCount = $termCount"
-        }
-        println "Number of fields - ${fieldIdMapping.size()}"
-        println "${fieldIdMapping.keySet()}"
-    }
-
-    def collectPaths(DirectoryReader reader) {
         Stopwatch w = Stopwatch.createStarted()
-        for (int i = 0; i < reader.numDocs(); i++) {
-            Document d = reader.document(i)
-            IndexableField path = d.getField(FieldNames.PATH)
-            assert path : "No path field found for document $i"
-            infos.add(i, new DocInfo(path.stringValue()))
+
+        List<FieldsDocIdIterator> fldDocIdIters = Lists.newArrayList()
+        fields.each {String fieldName ->
+            if (!ignoredFields.contains(fieldName)) {
+                FieldsDocIdIterator fldDocIter = new FieldsDocIdIterator(liveDocs, fields, fieldName, reader.maxDoc())
+                fldDocIdIters.add(fldDocIter)
+            }
         }
-        println "Collected path details for ${reader.numDocs()} docs in $w"
+        println "numFields: ${fldDocIdIters.size()}"
+
+        IndexDocInfoItearator idxDocInfos = new IndexDocInfoItearator(fldDocIdIters)
+        println "Preparing iterators took $w"
+
+        println "Proceeding to dump index contents from ${indexDir.absolutePath}"
+
+        int numDocs = 0
+        file.withPrintWriter { pw ->
+            idxDocInfos.each { docInfo ->
+                String path = reader.document(docInfo.docId).get(FieldNames.PATH)
+
+                numDocs++
+                pw.println "$path|${Joiner.on(',').join(docInfo.fieldNames)}"
+            }
+        }
+
+        return numDocs
     }
 
     private File getIndexDir() {
@@ -143,46 +128,124 @@ class LuceneIndexContentDumper{
         return indexDir
     }
 
-    static String getField(Integer fieldId) {
-        return fieldIdMapping.inverse().get(fieldId)
+    static class FieldsDocIdIterator extends AbstractIterator<FieldNameDocIdStruct> {
+        private Bits liveDocs
+        private FixedBitSet fbs
+        private DocIdSetIterator docIdIter
+        private String fieldName
+        private Terms terms
+
+        FieldsDocIdIterator(Bits liveDocs, Fields fields, String fieldName, int maxDoc) {
+            this.liveDocs = liveDocs
+            this.fbs = new FixedBitSet(maxDoc)
+            this.fieldName = fieldName
+            this.terms = fields.terms(fieldName)
+
+            TermsEnum termsEnum = terms.iterator(null)
+
+            while (termsEnum.next() != null) {
+                new TermsDocIdIterator(termsEnum.docs(liveDocs, null, DocsEnum.FLAG_NONE)).each { docId ->
+                    fbs.set(docId)
+                }
+            }
+
+            println "Field $fieldName has ${fbs.cardinality()} documents"
+
+            docIdIter = fbs.iterator()
+        }
+
+        @Override
+        protected FieldNameDocIdStruct computeNext() {
+            if(docIdIter.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+                return new FieldNameDocIdStruct(fieldName, docIdIter.docID())
+            } else {
+                return endOfData()
+            }
+        }
     }
 
-    static Integer getFieldId(String fieldName) {
-        Integer id = fieldIdMapping.get(fieldName)
-        if (!id) {
-            id = fieldIdMapping.size() + 1
-            fieldIdMapping.put(fieldName, id)
+    static class TermsDocIdIterator extends AbstractIterator<Integer> {
+        private DocsEnum docsEnum
+
+        TermsDocIdIterator(DocsEnum docsEnum) {
+            this.docsEnum = docsEnum
         }
-        return id
+
+        @Override
+        protected Integer computeNext() {
+            if(docsEnum.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+                return docsEnum.docID()
+            } else {
+                return endOfData()
+            }
+        }
     }
 
-    static class DocInfo implements Comparable<DocInfo>{
-        final byte[] pathBytes
-        final BitSet fieldIds = new BitSet()
+    static class DocInfo {
+        final int docId
+        final List<String> fieldNames
 
-        DocInfo(String path){
-            this.pathBytes = path.getBytes(Charsets.UTF_8)
+        DocInfo(int docId, List<String> fieldNames) {
+            this.docId = docId
+            this.fieldNames = fieldNames
+        }
+    }
+
+    static class IndexDocInfoItearator extends AbstractIterator<DocInfo> {
+        private PeekingIterator<FieldNameDocIdStruct> mergedIter
+        private Integer lastDocId = null
+
+        IndexDocInfoItearator(Iterable<? extends Iterator<FieldNameDocIdStruct>> iterators) {
+            mergedIter = Iterators.peekingIterator(Iterators.mergeSorted(iterators, new Comparator<FieldNameDocIdStruct>() {
+                @Override
+                int compare(FieldNameDocIdStruct i1, FieldNameDocIdStruct i2) {
+                    return i1 <=> i2
+                }
+            }))
         }
 
-        String toString(){
-            List<String> names = fieldIds.stream()
-                    .mapToObj({LuceneIndexContentDumper.getField(it)})
-                    .sorted()
-                    .collect(Collectors.toList())
-            return "${new String(pathBytes, Charsets.UTF_8)}|${names.join(',')}"
+        @Override
+        protected DocInfo computeNext() {
+            if (!mergedIter.hasNext()) {
+                return endOfData()
+            }
+            List<String> fieldNames = Lists.newArrayList()
+
+            FieldNameDocIdStruct next = mergedIter.peek()
+            if (lastDocId == null) {
+                lastDocId = next.docId
+            }
+
+            while (lastDocId.equals(next.docId) && mergedIter.hasNext()) {
+                fieldNames.add(next.fieldName)
+                mergedIter.next() // consume
+
+                if (mergedIter.hasNext()) {
+                    next = mergedIter.peek()
+                }
+            }
+
+            DocInfo ret = new DocInfo(lastDocId, fieldNames)
+            lastDocId = null
+            return ret
+        }
+    }
+
+    static class FieldNameDocIdStruct implements Comparable<FieldNameDocIdStruct> {
+        final String fieldName
+        final int docId
+
+        FieldNameDocIdStruct(String fieldName, int docId) {
+            this.fieldName = fieldName
+            this.docId = docId
         }
 
-        void addFieldId(Integer id){
-            this.fieldIds.set(id)
-        }
-
-        @CompileStatic(TypeCheckingMode.SKIP)
-        int compareTo(DocInfo o) {
-            return UnsignedBytes.lexicographicalComparator().compare(pathBytes, o.pathBytes)
+        @Override
+        int compareTo(FieldNameDocIdStruct that) {
+            int docIdCmp = this.docId.compareTo(that.docId)
+            return docIdCmp != 0 ? docIdCmp : this.fieldName.compareTo(that.fieldName)
         }
     }
 }
 
 new LuceneIndexContentDumper().dump()
-
-
