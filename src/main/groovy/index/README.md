@@ -2,6 +2,7 @@
 
 Checks consistency for all the Lucene indexes present in a repository.
 
+**Deprecated - Use [Oak Run Index Consistency Check](https://jackrabbit.apache.org/oak/docs/query/oak-run-indexing.html#check-index)**
 
 Load url
 
